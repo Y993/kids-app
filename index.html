@@ -83,7 +83,17 @@
       { text: 'くらい へやに ひとり...', emotion: 'surprised' },
       { text: 'おもちゃを かしてあげた', emotion: 'happy' },
       { text: 'ママに ほめられた！', emotion: 'happy' },
-      { text: 'いきなり おおきな音がした！', emotion: 'surprised' }
+      { text: 'いきなり おおきな音がした！', emotion: 'surprised' },
+      { text: 'ねんねの じかんだよ', emotion: 'sad' },
+      { text: 'おやつを もらった！', emotion: 'happy' },
+      { text: 'おもちゃを とられた', emotion: 'angry' },
+      { text: 'うんちが できた！', emotion: 'happy' },
+      { text: 'いもうとが ないた', emotion: 'surprised' },
+      { text: 'ぱぱと あそんでもらった', emotion: 'happy' },
+      { text: 'おべんとう たべられない...', emotion: 'sad' },
+      { text: 'はじめての ようちえん', emotion: 'surprised' },
+      { text: 'おともだちと けんかした', emotion: 'angry' },
+      { text: 'きれいな にじが でた！', emotion: 'happy' }
     ];
 
     // 数える対象アイコン
@@ -125,20 +135,47 @@
       </svg>
     );
 
+    const CountAppleSvg = ({ size = 24 }) => (
+      <svg viewBox="0 0 24 24" width={size} height={size}>
+        <circle cx="12" cy="13" r="8" fill="#f4a8a8" stroke="#e88" strokeWidth="1"/>
+        <path d="M 12 5 Q 14 2 12 1 Q 10 4 12 5" fill="#8b7355"/>
+        <path d="M 10 10 Q 12 8 14 10" fill="#5a3" stroke="#4a2" strokeWidth="0.5"/>
+      </svg>
+    );
+    const CountCarSvg = ({ size = 24 }) => (
+      <svg viewBox="0 0 24 24" width={size} height={size}>
+        <path d="M 4 12 L 4 16 L 8 16 L 9 14 L 15 14 L 16 16 L 20 16 L 20 12 L 18 8 L 6 8 Z" fill="#87ceeb"/>
+        <circle cx="8" cy="16" r="2" fill="#333"/>
+        <circle cx="16" cy="16" r="2" fill="#333"/>
+        <rect x="7" y="10" width="10" height="4" fill="#b8e0e8"/>
+      </svg>
+    );
+
     const COUNT_OBJECTS = [
       { id: 'star', label: 'ほし', Icon: CountStarSvg },
       { id: 'heart', label: 'はーと', Icon: CountHeartSvg },
-      { id: 'ball', label: 'ボール', Icon: CountBallSvg },
-      { id: 'flower', label: 'おはな', Icon: CountFlowerSvg }
+      { id: 'ball', label: 'ぼーる', Icon: CountBallSvg },
+      { id: 'flower', label: 'おはな', Icon: CountFlowerSvg },
+      { id: 'apple', label: 'りんご', Icon: CountAppleSvg },
+      { id: 'car', label: 'くるま', Icon: CountCarSvg }
     ];
 
-    // ルーティン項目
-    const ROUTINE_ITEMS = [
-      { id: 'face', label: 'かおを あらう', icon: 'face' },
-      { id: 'teeth', label: 'はを みがく', icon: 'teeth' },
-      { id: 'clothes', label: 'ふくを きる', icon: 'clothes' },
-      { id: 'breakfast', label: 'あさごはんを たべる', icon: 'meal' }
+    const DEFAULT_ROUTINE_ITEMS = [
+      { id: 'face', label: 'かおを あらう' },
+      { id: 'teeth', label: 'はを みがく' },
+      { id: 'clothes', label: 'ふくを きる' },
+      { id: 'breakfast', label: 'あさごはんを たべる' }
     ];
+
+    const STORY_TEMPLATES = [
+      (name) => `むかしむかし、${name}という こが いました。${name}は まいにち ぽちぽち あそぶのが だいすきです。あるひ、${name}は おそらを みあげました。きれいなほしが たくさん ひかっていました。「わあ、きれい！」${name}は うれしくなりました。そのよる、${name}は ゆめのなかで ほしと おどりました。とっても たのしかったです。`,
+      (name) => `${name}は きょう おさんぽに でかけました。ちいさい はなを みつけました。「かわいいね」${name}は にっこり。そのはなに みつばちが とんできました。${name}は びっくり した けど だいじょうぶ。また おさんぽに いくのが たのしみです。`,
+      (name) => `${name}の いちにち。あさ おきたら かおを あらいました。ごはんを たべて ママに 「いってきます」といいました。ようちえんで おともだちと たくさん あそびました。かえってきたら 「ただいま！」${name}は えがおで いえに かえりました。`,
+      (name) => `${name}は ぷれぜんとを もらいました。あかくて おおきな くつしたです。なかには おかしが いっぱい！「わあ、たのしい！」${name}は とびあがって よろこびました。きょうは しあわせな ひでした。`,
+      (name) => `${name}は たんじょうび。ケーキに ろうそくが ５ほん たちました。みんなで 「おたんじょうび おめでとう」と うたいました。${name}は いきを すって ふー！ぜんぶ けすことが できました。たのしい ぱーてぃーだったね。`
+    ];
+
+    const ROUTINE_STORAGE_KEY = 'pochipochi_routine_items';
 
     function App() {
       const [tab, setTab] = useState('kimochi');
@@ -155,10 +192,25 @@
       const [tappedCount, setTappedCount] = useState(0);
       const [numberWrong, setNumberWrong] = useState(false);
       const [numberCorrect, setNumberCorrect] = useState(false);
+      const [routineItems, setRoutineItems] = useState(() => {
+        try {
+          const saved = localStorage.getItem(ROUTINE_STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch (_) {}
+        return DEFAULT_ROUTINE_ITEMS.map(i => ({ ...i }));
+      });
       const [routineChecked, setRoutineChecked] = useState({});
       const [routineComplete, setRoutineComplete] = useState(false);
+      const [routineEditMode, setRoutineEditMode] = useState(false);
+      const [routineNewLabel, setRoutineNewLabel] = useState('');
+      const [routineEditingId, setRoutineEditingId] = useState(null);
+      const [routineEditLabel, setRoutineEditLabel] = useState('');
       const [storyName, setStoryName] = useState('');
       const [showStory, setShowStory] = useState(false);
+      const [storyTemplateIdx, setStoryTemplateIdx] = useState(0);
       const containerRef = useRef(null);
       const lastEmotionHandled = useRef(0);
       const lastNumberHandled = useRef(0);
@@ -184,6 +236,12 @@
       const addAchievement = useCallback(() => {
         setAchievementCount(prev => prev + 1);
       }, []);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(routineItems));
+        } catch (_) {}
+      }, [routineItems]);
 
       const handleEmotionAnswer = useCallback((emotionId, e) => {
         if (Date.now() - lastEmotionHandled.current < 400) return;
@@ -244,10 +302,11 @@
       }, [numberCount]);
 
       const handleRoutineToggle = useCallback((id, e) => {
+        if (routineEditMode) return;
         addRipple(e);
         setRoutineChecked(prev => {
           const next = { ...prev, [id]: !prev[id] };
-          const allChecked = ROUTINE_ITEMS.every(r => next[r.id]);
+          const allChecked = routineItems.every(r => next[r.id]);
           if (allChecked) {
             setTimeout(() => {
               setRoutineComplete(true);
@@ -261,6 +320,43 @@
           }
           return next;
         });
+      }, [routineEditMode, routineItems]);
+
+      const handleRoutineAdd = useCallback(() => {
+        const label = routineNewLabel.trim();
+        if (!label || label.length > 20) return;
+        const id = 'custom_' + Date.now();
+        setRoutineItems(prev => [...prev, { id, label }]);
+        setRoutineNewLabel('');
+        addRipple({ clientX: 0, clientY: 0 });
+      }, [routineNewLabel]);
+
+      const handleRoutineEdit = useCallback((id) => {
+        const item = routineItems.find(r => r.id === id);
+        if (item) {
+          setRoutineEditingId(id);
+          setRoutineEditLabel(item.label);
+        }
+      }, [routineItems]);
+
+      const handleRoutineEditSave = useCallback(() => {
+        const label = routineEditLabel.trim();
+        if (!label || label.length > 20 || !routineEditingId) return;
+        setRoutineItems(prev => prev.map(r => r.id === routineEditingId ? { ...r, label } : r));
+        setRoutineEditingId(null);
+        setRoutineEditLabel('');
+      }, [routineEditingId, routineEditLabel]);
+
+      const handleRoutineDelete = useCallback((id) => {
+        setRoutineItems(prev => prev.filter(r => r.id !== id));
+        setRoutineChecked(prev => { const next = { ...prev }; delete next[id]; return next; });
+        if (routineEditingId === id) setRoutineEditingId(null);
+      }, [routineEditingId]);
+
+      const handleRoutineReset = useCallback(() => {
+        setRoutineItems(DEFAULT_ROUTINE_ITEMS.map(i => ({ ...i })));
+        setRoutineChecked({});
+        setRoutineEditMode(false);
       }, []);
 
       const handleStorySubmit = useCallback((e) => {
@@ -268,6 +364,7 @@
         if (storyName.trim()) {
           addRipple(e);
           addAchievement();
+          setStoryTemplateIdx(Math.floor(Math.random() * STORY_TEMPLATES.length));
           setShowStory(true);
         }
       }, [storyName]);
@@ -408,18 +505,59 @@
 
             {tab === 'seikatsu' && (
               <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-purple-200 max-w-md mx-auto">
-                <p className="text-center text-lg font-bold text-[#8b7355] mb-6">きょうやったこと チェック！</p>
+                <div className="flex items-center justify-between mb-6">
+                  <p className="text-lg font-bold text-[#8b7355]">きょうやったこと チェック！</p>
+                  <button type="button" onClick={(e) => { addRipple(e); setRoutineEditMode(!routineEditMode); setRoutineEditingId(null); }}
+                    className={`px-3 py-1.5 rounded-xl text-sm font-bold ${routineEditMode ? 'bg-purple-400 text-white' : 'bg-purple-100 text-purple-600'}`}>
+                    {routineEditMode ? 'おわる' : 'じゅんびを かえる'}
+                  </button>
+                </div>
                 <div className="space-y-4">
-                  {ROUTINE_ITEMS.map(r => (
-                    <button key={r.id} onClick={(e) => handleRoutineToggle(r.id, e)}
-                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border-4 transition ${routineChecked[r.id] ? 'border-purple-400 bg-purple-100' : 'border-purple-200 bg-purple-50'}`}>
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl ${routineChecked[r.id] ? 'bg-purple-400 text-white' : 'bg-white border-2 border-purple-300'}`}>
-                        {routineChecked[r.id] ? '✓' : ''}
-                      </div>
-                      <span className="font-bold text-[#8b7355]">{r.label}</span>
-                    </button>
+                  {routineItems.map(r => (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <button onClick={(e) => routineEditingId === r.id ? null : handleRoutineToggle(r.id, e)}
+                        className={`flex-1 flex items-center gap-4 p-4 rounded-2xl border-4 transition ${routineEditMode ? 'border-purple-100' : routineChecked[r.id] ? 'border-purple-400 bg-purple-100' : 'border-purple-200 bg-purple-50'}`}
+                        disabled={routineEditMode}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl shrink-0 ${routineChecked[r.id] ? 'bg-purple-400 text-white' : 'bg-white border-2 border-purple-300'}`}>
+                          {routineChecked[r.id] ? '✓' : ''}
+                        </div>
+                        {routineEditingId === r.id ? (
+                          <div className="flex gap-2 flex-1">
+                            <input type="text" value={routineEditLabel} onChange={e => setRoutineEditLabel(e.target.value)}
+                              className="flex-1 px-2 py-1 border-2 border-purple-300 rounded-lg text-sm"
+                              maxLength={20} autoFocus />
+                            <button type="button" onClick={handleRoutineEditSave}
+                              className="px-3 py-1 bg-purple-400 text-white rounded-lg text-sm font-bold">けってい</button>
+                          </div>
+                        ) : (
+                          <span className="font-bold text-[#8b7355]">{r.label}</span>
+                        )}
+                      </button>
+                      {routineEditMode && routineEditingId !== r.id && (
+                        <div className="flex gap-1 shrink-0">
+                          <button type="button" onClick={() => handleRoutineEdit(r.id)}
+                            className="p-2 rounded-lg bg-purple-100 text-purple-600 font-bold text-sm">へんしゅう</button>
+                          <button type="button" onClick={() => handleRoutineDelete(r.id)}
+                            className="p-2 rounded-lg bg-red-100 text-red-600 font-bold text-sm">けす</button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
+                {routineEditMode && (
+                  <div className="mt-4 p-4 rounded-xl border-2 border-dashed border-purple-200 bg-purple-50">
+                    <p className="text-sm font-bold text-[#8b7355] mb-2">ついかする</p>
+                    <div className="flex gap-2">
+                      <input type="text" value={routineNewLabel} onChange={e => setRoutineNewLabel(e.target.value)}
+                        placeholder="ないようを いれてね"
+                        className="flex-1 px-3 py-2 border-2 border-purple-300 rounded-xl text-sm" maxLength={20} />
+                      <button type="button" onClick={handleRoutineAdd}
+                        className="px-4 py-2 bg-purple-400 text-white rounded-xl text-sm font-bold">ついか</button>
+                    </div>
+                    <button type="button" onClick={handleRoutineReset}
+                      className="mt-2 text-xs text-[#a08060] underline">もとにもどす</button>
+                  </div>
+                )}
                 {routineComplete && (
                   <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/20">
                     <div className="bg-white rounded-2xl p-6 mx-4 text-center">
@@ -449,11 +587,9 @@
                 ) : (
                   <div className="space-y-4 text-[#8b7355] leading-relaxed">
                     <p className="font-bold text-xl text-center mb-6">{storyName}の おはなし</p>
-                    <p>むかしむかし、{storyName}という こが いました。</p>
-                    <p>{storyName}は まいにち ぽちぽち あそぶのが だいすきです。</p>
-                    <p>あるひ、{storyName}は おそらを みあげました。きれいなほしが たくさん ひかっていました。</p>
-                    <p>「わあ、きれい！」{storyName}は うれしくなりました。</p>
-                    <p>そのよる、{storyName}は ゆめのなかで ほしと おどりました。とっても たのしかったです。</p>
+                    {(STORY_TEMPLATES[storyTemplateIdx] || STORY_TEMPLATES[0])(storyName).split('。').filter(s => s.trim()).map((para, i) => (
+                      <p key={i}>{para.trim()}{para.trim().endsWith('。') ? '' : '。'}</p>
+                    ))}
                     <p className="font-bold text-center pt-4">おしまい ♡</p>
                     <button onClick={() => setShowStory(false)} className="w-full mt-4 p-3 rounded-xl bg-orange-200 font-bold">もういちど よむ</button>
                   </div>
