@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#fef3e2">
+  <title>ぽちぽちちいくアドベンチャー</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { touch-action: manipulation; }
+    html, body { overscroll-behavior: none; }
+    body { font-family: 'Hiragino Maru Gothic ProN', 'Meiryo', sans-serif; }
+    @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+    @keyframes confetti-fall { to { transform: translate(var(--dx), 120vh) rotate(720deg); opacity: 0; } }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+  </style>
+</head>
+<body class="bg-[#fef3e2] overflow-hidden min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useCallback, useRef, useEffect, useMemo } = React;
+
+    // 波紋エフェクト（録画用）
+    const Ripple = ({ x, y, onEnd }) => {
+      useEffect(() => {
+        const t = setTimeout(onEnd, 600);
+        return () => clearTimeout(t);
+      }, [onEnd]);
+      return (
+        <div className="absolute pointer-events-none w-16 h-16 -ml-8 -mt-8 rounded-full border-4 border-orange-400/80 animate-[ripple_0.6s_ease-out_forwards]" style={{ left: x, top: y }} />
+      );
+    };
+
+    // 花吹雪
+    const Confetti = ({ count = 50, onEnd }) => {
+      const [items, setItems] = useState([]);
+      useEffect(() => {
+        setItems(Array.from({ length: count }, (_, i) => ({
+          id: i, x: Math.random() * 100, delay: i * 30, color: ['#f4a8a8', '#b8e0e8', '#dda0dd', '#ffe4b5', '#87ceeb'][i % 5],
+          dx: (Math.random() - 0.5) * 200, size: 8 + Math.random() * 8
+        })));
+        const t = setTimeout(onEnd, 5000);
+        return () => clearTimeout(t);
+      }, [count, onEnd]);
+      return (
+        <div className="fixed inset-0 pointer-events-none z-50">
+          {items.map(p => (
+            <div key={p.id} className="absolute rounded-full" style={{
+              left: `${p.x}%`, top: -20, width: p.size, height: p.size, background: p.color,
+              animation: `confetti-fall 4s linear ${p.delay}ms forwards`,
+              '--dx': `${p.dx}px`
+            }} />
+          ))}
+        </div>
+      );
+    };
+
+    // 表情アイコン
+    const FaceHappy = () => (<svg viewBox="0 0 50 50" className="w-full h-full"><circle cx="25" cy="25" r="22" fill="#ffe4b5"/><ellipse cx="18" cy="22" rx="3" ry="4" fill="#333"/><ellipse cx="32" cy="22" rx="3" ry="4" fill="#333"/><path d="M 15 32 Q 25 40 35 32" stroke="#e88" strokeWidth="2" fill="none"/></svg>);
+    const FaceSad = () => (<svg viewBox="0 0 50 50" className="w-full h-full"><circle cx="25" cy="25" r="22" fill="#ffe4b5"/><ellipse cx="18" cy="22" rx="3" ry="4" fill="#333"/><ellipse cx="32" cy="22" rx="3" ry="4" fill="#333"/><path d="M 15 30 Q 25 26 35 30" stroke="#e88" strokeWidth="2" fill="none"/><path d="M 17 33 L 19 38 M 25 35 L 25 40 M 33 33 L 31 38" stroke="#87ceeb" strokeWidth="1"/></svg>);
+    const FaceAngry = () => (<svg viewBox="0 0 50 50" className="w-full h-full"><circle cx="25" cy="25" r="22" fill="#ffe4b5"/><ellipse cx="18" cy="22" rx="3" ry="4" fill="#333"/><ellipse cx="32" cy="22" rx="3" ry="4" fill="#333"/><path d="M 14 32 L 36 32" stroke="#e88" strokeWidth="2"/><path d="M 10 16 L 16 21 M 40 16 L 34 21" stroke="#f4a8a8" strokeWidth="2"/></svg>);
+    const FaceSurprised = () => (<svg viewBox="0 0 50 50" className="w-full h-full"><circle cx="25" cy="25" r="22" fill="#ffe4b5"/><circle cx="18" cy="22" r="4" fill="#333"/><circle cx="32" cy="22" r="4" fill="#333"/><ellipse cx="25" cy="34" rx="5" ry="3" fill="#e88"/></svg>);
+
+    const EMOTIONS = [
+      { id: 'happy', label: 'にこにこ', Icon: FaceHappy },
+      { id: 'sad', label: 'かなしい', Icon: FaceSad },
+      { id: 'angry', label: 'ぷんぷん', Icon: FaceAngry },
+      { id: 'surprised', label: 'びっくり', Icon: FaceSurprised }
+    ];
+    const AFFIRMATIONS = { happy: 'そうだね、うれしいね', sad: 'そうだね、かなしいね', angry: 'そうだね、おこっちゃうね', surprised: 'そうだね、びっくりだね' };
+
+    const EMOTION_QUESTIONS = [
+      { text: 'アイスを おとしちゃった...', emotion: 'sad' },
+      { text: 'ぷれぜんとを もらった！', emotion: 'happy' },
+      { text: 'かみなりが ゴロゴロ...', emotion: 'surprised' },
+      { text: 'たんじょうび ケーキだ！', emotion: 'happy' },
+      { text: 'ころんじゃった...', emotion: 'sad' },
+      { text: 'おともだちに いわれちゃった', emotion: 'angry' },
+      { text: 'くらい へやに ひとり...', emotion: 'surprised' },
+      { text: 'おもちゃを かしてあげた', emotion: 'happy' },
+      { text: 'ママに ほめられた！', emotion: 'happy' },
+      { text: 'いきなり おおきな音がした！', emotion: 'surprised' }
+    ];
+
+    // 数える対象アイコン
+    const CountStarSvg = ({ size = 24 }) => (
+      <svg viewBox="0 0 24 24" width={size} height={size}>
+        <path d="M12 2 L14 10 L22 10 L16 15 L18 23 L12 18 L6 23 L8 15 L2 10 L10 10 Z" fill="#ffd700" stroke="#ffb300" strokeWidth="0.5"/>
+      </svg>
+    );
+    const CountHeartSvg = ({ size = 24 }) => (
+      <svg viewBox="0 0 24 24" width={size} height={size}>
+        <path d="M12 21.35 C12 21.35 2 14 2 8.5 C2 5.5 4.5 3 7.5 3 C9.5 3 11 4 12 5.5 C13 4 14.5 3 16.5 3 C19.5 3 22 5.5 22 8.5 C22 14 12 21.35 12 21.35 Z" fill="#f4a8a8"/>
+      </svg>
+    );
+    const CountBallSvg = ({ size = 24 }) => (
+      <svg viewBox="0 0 24 24" width={size} height={size}>
+        <circle cx="12" cy="12" r="10" fill="#87ceeb" stroke="#5da3d4" strokeWidth="1"/>
+      </svg>
+    );
+    const CountFlowerSvg = ({ size = 24 }) => (
+      <svg viewBox="0 0 24 24" width={size} height={size}>
+        <circle cx="12" cy="12" r="4" fill="#ffd700"/>
+        {[0,1,2,3,4,5].map(i => {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+          const x = 12 + Math.cos(a) * 8;
+          const y = 12 + Math.sin(a) * 8;
+          return <circle key={i} cx={x} cy={y} r="3" fill="#f4a8a8"/>;
+        })}
+      </svg>
+    );
+    const AchievementFlowerSvg = () => (
+      <svg viewBox="0 0 24 24" width={20} height={20}>
+        <circle cx="12" cy="12" r="3" fill="#ff6b6b"/>
+        {[0,1,2,3,4].map(i => {
+          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+          const x = 12 + Math.cos(a) * 6;
+          const y = 12 + Math.sin(a) * 6;
+          return <circle key={i} cx={x} cy={y} r="2.5" fill="#f4a8a8"/>;
+        })}
+      </svg>
+    );
+
+    const COUNT_OBJECTS = [
+      { id: 'star', label: 'ほし', Icon: CountStarSvg },
+      { id: 'heart', label: 'はーと', Icon: CountHeartSvg },
+      { id: 'ball', label: 'ボール', Icon: CountBallSvg },
+      { id: 'flower', label: 'おはな', Icon: CountFlowerSvg }
+    ];
+
+    // ルーティン項目
+    const ROUTINE_ITEMS = [
+      { id: 'face', label: 'かおを あらう', icon: 'face' },
+      { id: 'teeth', label: 'はを みがく', icon: 'teeth' },
+      { id: 'clothes', label: 'ふくを きる', icon: 'clothes' },
+      { id: 'breakfast', label: 'あさごはんを たべる', icon: 'meal' }
+    ];
+
+    function App() {
+      const [tab, setTab] = useState('kimochi');
+      const [ripples, setRipples] = useState([]);
+      const [confetti, setConfetti] = useState(false);
+      const [confettiCount, setConfettiCount] = useState(50);
+      const [achievementCount, setAchievementCount] = useState(0);
+      const [emotionQIdx, setEmotionQIdx] = useState(0);
+      const [emotionCorrect, setEmotionCorrect] = useState(false);
+      const [emotionWrong, setEmotionWrong] = useState(false);
+      const [numberCount, setNumberCount] = useState(5);
+      const [countObjectType, setCountObjectType] = useState(0);
+      const [countLayoutScattered, setCountLayoutScattered] = useState(false);
+      const [tappedCount, setTappedCount] = useState(0);
+      const [numberWrong, setNumberWrong] = useState(false);
+      const [numberCorrect, setNumberCorrect] = useState(false);
+      const [routineChecked, setRoutineChecked] = useState({});
+      const [routineComplete, setRoutineComplete] = useState(false);
+      const [storyName, setStoryName] = useState('');
+      const [showStory, setShowStory] = useState(false);
+      const containerRef = useRef(null);
+      const lastEmotionHandled = useRef(0);
+      const lastNumberHandled = useRef(0);
+      const emotionAdvanceRef = useRef(null);
+
+      const addRipple = useCallback((e) => {
+        if (!e || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = (e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX) - rect.left;
+        const y = (e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY) - rect.top;
+        if (typeof x !== 'number' || typeof y !== 'number') return;
+        const id = Date.now() + Math.random();
+        setRipples(prev => [...prev, { id, x, y }]);
+        setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 600);
+      }, []);
+
+      const triggerConfetti = useCallback(() => {
+        setConfettiCount(50);
+        setConfetti(true);
+        setTimeout(() => setConfetti(false), 100);
+      }, []);
+
+      const addAchievement = useCallback(() => {
+        setAchievementCount(prev => prev + 1);
+      }, []);
+
+      const handleEmotionAnswer = useCallback((emotionId, e) => {
+        if (Date.now() - lastEmotionHandled.current < 400) return;
+        lastEmotionHandled.current = Date.now();
+        if (e) { e.preventDefault(); e.stopPropagation(); addRipple(e); }
+        const q = EMOTION_QUESTIONS[emotionQIdx];
+        if (emotionId === q.emotion) {
+          const qLen = EMOTION_QUESTIONS.length;
+          setEmotionWrong(false);
+          setEmotionCorrect(true);
+          addAchievement();
+          triggerConfetti();
+          setTimeout(() => {
+            setEmotionCorrect(false);
+            setEmotionQIdx(prev => (prev + 1) % qLen);
+          }, 2000);
+        } else {
+          setEmotionWrong(true);
+          setTimeout(() => setEmotionWrong(false), 1800);
+        }
+      }, [emotionQIdx]);
+
+      const emotionOrder = useMemo(() => [...EMOTIONS].sort(() => Math.random() - 0.5), [emotionQIdx]);
+
+      const handleCountTap = useCallback((e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); addRipple(e); }
+        setTappedCount(prev => Math.min(prev + 1, numberCount));
+      }, [numberCount]);
+
+      const scatteredPositions = useMemo(() => {
+        if (!countLayoutScattered) return [];
+        return Array.from({ length: numberCount }, () => ({
+          left: 10 + Math.random() * 70,
+          top: 5 + Math.random() * 50
+        }));
+      }, [countLayoutScattered, numberCount]);
+
+      const handleNumberGuess = useCallback((n, e) => {
+        if (Date.now() - lastNumberHandled.current < 400) return;
+        lastNumberHandled.current = Date.now();
+        if (e) { e.preventDefault(); e.stopPropagation(); addRipple(e); }
+        if (n === numberCount) {
+          setNumberWrong(false);
+          setNumberCorrect(true);
+          addAchievement();
+          triggerConfetti();
+          setTimeout(() => {
+            setNumberCorrect(false);
+            setTappedCount(0);
+            setCountObjectType(prev => (prev + 1) % COUNT_OBJECTS.length);
+            setCountLayoutScattered(prev => !prev);
+            setNumberCount(3 + Math.floor(Math.random() * 5));
+          }, 2000);
+        } else {
+          setNumberWrong(true);
+          setTimeout(() => setNumberWrong(false), 1500);
+        }
+      }, [numberCount]);
+
+      const handleRoutineToggle = useCallback((id, e) => {
+        addRipple(e);
+        setRoutineChecked(prev => {
+          const next = { ...prev, [id]: !prev[id] };
+          const allChecked = ROUTINE_ITEMS.every(r => next[r.id]);
+          if (allChecked) {
+            setTimeout(() => {
+              setRoutineComplete(true);
+              addAchievement();
+              triggerConfetti();
+              setTimeout(() => {
+                setRoutineComplete(false);
+                setRoutineChecked({});
+              }, 2000);
+            }, 300);
+          }
+          return next;
+        });
+      }, []);
+
+      const handleStorySubmit = useCallback((e) => {
+        e.preventDefault();
+        if (storyName.trim()) {
+          addRipple(e);
+          addAchievement();
+          setShowStory(true);
+        }
+      }, [storyName]);
+
+      const achievementMessage = achievementCount === 0 ? '' :
+        achievementCount < 3 ? 'すごい！もっと やってみよう！' :
+        achievementCount < 6 ? 'たくさん できたね！もうすこし ちょうせん！' :
+        achievementCount < 10 ? 'とっても がんばってる！まだ できるかな？' :
+        'めちゃくちゃ がんばった！まだ あそべるよ！';
+
+      const TABS = [
+        { id: 'kimochi', label: 'きもち', bg: 'bg-pink-100' },
+        { id: 'kazu', label: 'かず', bg: 'bg-blue-100' },
+        { id: 'seikatsu', label: 'せいかつ', bg: 'bg-purple-100' },
+        { id: 'ehon', label: 'えほん', bg: 'bg-orange-100' }
+      ];
+
+      return (
+        <div ref={containerRef} className="relative w-full min-h-[100dvh]"
+          onPointerDown={addRipple}
+        >
+          <header className="sticky top-0 z-20 p-3 bg-gradient-to-b from-[#fef3e2] to-transparent">
+            <h1 className="text-xl font-bold text-center text-[#8b7355]">ぽちぽちちいく</h1>
+            {achievementCount > 0 && (
+              <div className="flex flex-col items-center mt-2 py-2 px-3 bg-white/80 rounded-xl border-2 border-[#d4a574] mx-2">
+                <div className="flex items-center gap-0.5 flex-wrap justify-center">
+                  {Array.from({ length: Math.min(achievementCount, 10) }).map((_, i) => (
+                    <AchievementFlowerSvg key={i} />
+                  ))}
+                  {achievementCount > 10 && <span className="text-sm text-[#8b7355] font-bold ml-1">+{achievementCount - 10}</span>}
+                </div>
+                <p className="text-sm font-bold text-[#8b7355] mt-1">きょう {achievementCount}こ できた！</p>
+                {achievementMessage && <p className="text-xs text-pink-500 font-bold">{achievementMessage}</p>}
+              </div>
+            )}
+            <div className="flex justify-center gap-1 mt-2 overflow-x-auto">
+              {TABS.map(t => (
+                <button key={t.id} onClick={(e) => { addRipple(e); setTab(t.id); }}
+                  className={`px-4 py-2 rounded-full font-bold text-sm transition ${tab === t.id ? `${t.bg} border-2 border-[#d4a574]` : 'bg-white/80'}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </header>
+
+          <main className="p-4 pb-24">
+            {tab === 'kimochi' && (
+              <div key={emotionQIdx} className="bg-white rounded-2xl p-6 shadow-lg border-2 border-pink-200 max-w-md mx-auto">
+                <p className="text-center text-lg font-bold text-[#8b7355] mb-6">{EMOTION_QUESTIONS[emotionQIdx].text}</p>
+                <p className="text-center text-sm text-[#a08060] mb-4">どんなかお？</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {emotionOrder.map(em => {
+                    const Icon = em.Icon;
+                    return (
+                      <button key={em.id} type="button"
+                        onPointerUp={(e) => handleEmotionAnswer(em.id, e)}
+                        onClick={(e) => handleEmotionAnswer(em.id, e)}
+                        className="flex flex-col items-center p-4 rounded-2xl border-4 border-pink-200 bg-pink-50 active:scale-95 touch-manipulation select-none">
+                        <div className="w-14 h-14 mb-2"><Icon /></div>
+                        <span className="font-bold text-[#8b7355]">{em.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {emotionWrong && (
+                  <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 pointer-events-none">
+                    <div className="bg-white border-4 border-red-400 rounded-2xl px-8 py-6 shadow-xl mx-4 animate-[shake_0.4s_ease-in-out]">
+                      <p className="text-xl font-bold text-red-600 text-center">ちがうよ</p>
+                      <p className="text-base text-[#8b7355] text-center mt-2">もういちど かんがえてみよう！</p>
+                    </div>
+                  </div>
+                )}
+                {emotionCorrect && (
+                  <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/20">
+                    <div className="bg-white rounded-2xl p-6 mx-4 text-center">
+                      <p className="text-2xl font-bold text-pink-500">すごい！</p>
+                      <p className="text-lg text-[#8b7355] mt-2">{AFFIRMATIONS[EMOTION_QUESTIONS[emotionQIdx].emotion]}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'kazu' && (() => {
+              const CountIcon = COUNT_OBJECTS[countObjectType].Icon;
+              const countLabel = COUNT_OBJECTS[countObjectType].label;
+              return (
+              <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-blue-200 max-w-md mx-auto">
+                <p className="text-center text-lg font-bold text-[#8b7355] mb-4">{countLabel}を ぽちぽち かぞえてね！</p>
+                <div className={`relative py-6 min-h-[160px] ${countLayoutScattered ? 'overflow-visible' : 'flex flex-wrap justify-center gap-4'}`}>
+                  {countLayoutScattered ? (
+                    scatteredPositions.map((pos, i) => (
+                      <button key={i} type="button" className="absolute p-1 active:scale-90 transition-transform touch-manipulation -translate-x-1/2 -translate-y-1/2"
+                        style={{ left: `${pos.left}%`, top: `${pos.top}%` }}
+                        onPointerUp={(e) => handleCountTap(e)}>
+                        <CountIcon size={40} />
+                      </button>
+                    ))
+                  ) : (
+                    Array.from({ length: numberCount }).map((_, i) => (
+                      <button key={i} type="button" className="p-1 active:scale-90 transition-transform touch-manipulation"
+                        onPointerUp={(e) => handleCountTap(e)}>
+                        <CountIcon size={40} />
+                      </button>
+                    ))
+                  )}
+                </div>
+                <p className="text-center text-[#8b7355] font-bold mb-2">{tappedCount}こ ぽちぽちしたよ</p>
+                <p className="text-center text-sm text-[#a08060] mb-4">なんこある？</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {[1,2,3,4,5,6,7,8].map(n => (
+                    <button key={n} type="button"
+                      onPointerUp={(e) => handleNumberGuess(n, e)}
+                      onClick={(e) => handleNumberGuess(n, e)}
+                      className="w-12 h-12 rounded-full font-bold text-lg border-4 border-blue-200 bg-blue-50 active:scale-95 touch-manipulation select-none">
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                {numberWrong && (
+                  <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/20 pointer-events-none">
+                    <div className="bg-white rounded-2xl p-6 mx-4 text-center animate-bounce">
+                      <p className="text-xl font-bold text-orange-500">もういちど かんがえてみよう！</p>
+                    </div>
+                  </div>
+                )}
+                {numberCorrect && (
+                  <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/20">
+                    <div className="bg-white rounded-2xl p-6 mx-4 text-center">
+                      <p className="text-2xl font-bold text-blue-500">すごい！</p>
+                      <p className="text-lg text-[#8b7355] mt-2">せいかい！ {numberCount}こだったね</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              );
+            })()}
+
+            {tab === 'seikatsu' && (
+              <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-purple-200 max-w-md mx-auto">
+                <p className="text-center text-lg font-bold text-[#8b7355] mb-6">きょうやったこと チェック！</p>
+                <div className="space-y-4">
+                  {ROUTINE_ITEMS.map(r => (
+                    <button key={r.id} onClick={(e) => handleRoutineToggle(r.id, e)}
+                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border-4 transition ${routineChecked[r.id] ? 'border-purple-400 bg-purple-100' : 'border-purple-200 bg-purple-50'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl ${routineChecked[r.id] ? 'bg-purple-400 text-white' : 'bg-white border-2 border-purple-300'}`}>
+                        {routineChecked[r.id] ? '✓' : ''}
+                      </div>
+                      <span className="font-bold text-[#8b7355]">{r.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {routineComplete && (
+                  <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/20">
+                    <div className="bg-white rounded-2xl p-6 mx-4 text-center">
+                      <p className="text-2xl font-bold text-purple-500">すごい！</p>
+                      <p className="text-lg text-[#8b7355] mt-2">ぜんぶ できたね！</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'ehon' && (
+              <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-orange-200 max-w-md mx-auto">
+                {!showStory ? (
+                  <>
+                    <p className="text-center text-lg font-bold text-[#8b7355] mb-4">おなまえを いれてね</p>
+                    <form onSubmit={handleStorySubmit} className="flex flex-col gap-4">
+                      <input type="text" value={storyName} onChange={e => setStoryName(e.target.value)}
+                        placeholder="あなたのなまえ"
+                        className="w-full p-4 rounded-2xl border-4 border-orange-200 text-center text-xl font-bold" maxLength={10} />
+                      <button type="submit" onClick={addRipple}
+                        className="w-full p-4 rounded-2xl bg-orange-400 text-white font-bold text-lg active:scale-95">
+                        えほんを みる
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <div className="space-y-4 text-[#8b7355] leading-relaxed">
+                    <p className="font-bold text-xl text-center mb-6">{storyName}の おはなし</p>
+                    <p>むかしむかし、{storyName}という こが いました。</p>
+                    <p>{storyName}は まいにち ぽちぽち あそぶのが だいすきです。</p>
+                    <p>あるひ、{storyName}は おそらを みあげました。きれいなほしが たくさん ひかっていました。</p>
+                    <p>「わあ、きれい！」{storyName}は うれしくなりました。</p>
+                    <p>そのよる、{storyName}は ゆめのなかで ほしと おどりました。とっても たのしかったです。</p>
+                    <p className="font-bold text-center pt-4">おしまい ♡</p>
+                    <button onClick={() => setShowStory(false)} className="w-full mt-4 p-3 rounded-xl bg-orange-200 font-bold">もういちど よむ</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+
+          {ripples.map(r => <Ripple key={r.id} x={r.x} y={r.y} onEnd={() => {}} />)}
+          {confetti && <Confetti count={confettiCount} onEnd={() => {}} />}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
